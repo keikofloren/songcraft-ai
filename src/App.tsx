@@ -84,7 +84,10 @@ export default function App() {
           userId ? (
             <Navigate to="/therapist/dashboard" replace />
           ) : (
-            <TherapistLogin onLoginSuccess={handleLoginSuccess} />
+            <TherapistLogin 
+              onLoginSuccess={handleLoginSuccess}
+              onNavigate={(path) => navigate(path)}
+            />
           )
         }
       />

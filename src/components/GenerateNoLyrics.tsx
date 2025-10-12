@@ -72,7 +72,7 @@ export default function GenerateNoLyrics() {
               </Label>
               <Select
                 value={instForm || ""}
-                onValueChange={(val: SongFormat) => setInstForm(val)}
+                onValueChange={(val) => setInstForm(val as SongFormat)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select song structure..." />

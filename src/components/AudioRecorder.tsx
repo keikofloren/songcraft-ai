@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import { useState, useRef } from "react";
 
 type Props = {
   onRecorded?: (blob: Blob) => void;

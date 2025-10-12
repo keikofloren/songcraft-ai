@@ -145,7 +145,7 @@ export default function GenerateLyrics() {
               <Label className="text-lg font-semibold">Song Form</Label>
               <Select
                 value={lyricForm || ""}
-                onValueChange={(val: SongFormat) => setLyricForm(val)}
+                onValueChange={(val) => setLyricForm(val as SongFormat)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select song structure..." />
