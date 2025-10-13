@@ -42,7 +42,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # Local development
         "https://main.d179o01l4o00ke.amplifyapp.com",  # Production Amplify
-        "http://52.62.46.27:8000",  # Backend itself
+        "http://52.62.46.27:8000",  # Backend itself (EC2)
+        "*",  # Allow all origins for Render deployment
     ],
     allow_credentials=True,
     allow_methods=["*"],
