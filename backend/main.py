@@ -41,9 +41,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Local development
-        "https://main.d179o01l4o00ke.amplifyapp.com",  # Production Amplify
+        "https://main.d179o01l4o00ke.amplifyapp.com",  # Production Amplify (deprecated)
+        "https://songcraft-ai.vercel.app",  # Production Vercel frontend
         "http://52.62.46.27:8000",  # Backend itself (EC2)
-        "*",  # Allow all origins for Render deployment
     ],
     allow_credentials=True,
     allow_methods=["*"],
