@@ -70,7 +70,8 @@ export default function DrawingUpload({
       const formData = new FormData();
       formData.append("image", file);
 
-      const response = await fetch("http://localhost:8000/analyze-drawing", {
+      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const response = await fetch(`${API_BASE}/analyze-drawing`, {
         method: "POST",
         body: formData,
       });

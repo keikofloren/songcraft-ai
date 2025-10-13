@@ -577,28 +577,6 @@ export default function MotifAndInstrumentation() {
               </div>
             )}
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-sm text-brown-700">
-                <strong>Note:</strong> For image/drawing-based melody input,
-                consider using:
-              </p>
-              <ul className="text-sm text-brown-700 mt-2 space-y-1 ml-4">
-                <li>
-                  • <strong>Google Vision API</strong> - Extract curves from
-                  drawings
-                </li>
-                <li>
-                  • <strong>OpenCV.js</strong> - Client-side image processing
-                </li>
-                <li>
-                  • <strong>ML5.js PoseNet</strong> - Track hand-drawn patterns
-                </li>
-              </ul>
-              <p className="text-sm text-brown-500 mt-2">
-                (This feature will be implemented in a future update)
-              </p>
-            </div>
-
             <div className="pt-6">
               <Button
                 onClick={handleGenerate}

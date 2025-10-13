@@ -339,7 +339,7 @@ export default function TherapistDashboard({
                           )
                         }
                       >
-                        <SelectTrigger className="w-full border-4 border-amber-950 hover:border-amber-900 focus:border-amber-900 rounded-2xl">
+                        <SelectTrigger className="w-full border-2 border-amber-950 hover:border-amber-900 focus:border-amber-900 rounded-2xl">
                           <SelectValue placeholder="Sort by..." />
                         </SelectTrigger>
                         <SelectContent>

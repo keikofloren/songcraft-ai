@@ -167,13 +167,13 @@ export default function PatientSongs() {
         <div className="max-w-4xl mx-auto">
           {/* Patient Info */}
           {patient && (
-            <Card className="mb-8 border-[6px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
+            <Card className="mb-16 border-[3px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
               <CardHeader className="bg-gradient-to-r from-amber-950 to-amber-900 border-b-4 border-amber-950">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-br from-amber-800 to-amber-950 rounded-lg shadow-md">
+                  <div className="p-2 mb-4 bg-gradient-to-br from-amber-800 to-amber-950 rounded-lg shadow-md">
                     <User className="h-5 w-5 text-amber-100" />
                   </div>
-                  <CardTitle className="text-xl text-white">
+                  <CardTitle className="mb-4 text-xl text-white">
                     Patient Information
                   </CardTitle>
                 </div>
