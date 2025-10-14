@@ -574,33 +574,62 @@ export default function LoadingSong() {
                             size="sm"
                             className="w-full"
                             onClick={async () => {
-                              // Find the song that was inserted by the webhook
-                              // It should have this audio_url
-                              const { data: songData, error } = await supabase
-                                .from("songs")
-                                .select("*")
-                                .eq("audio_url", url)
-                                .order("created_at", { ascending: false })
-                                .limit(1)
-                                .single();
+                              // After we added permanent storage, the webhook may update audio_url
+                              // from the temporary Suno URL to a Supabase Storage URL. So searching by
+                              // the temporary url may fail. Instead, look up by task_id and pick the
+                              // selected version index, retrying briefly if the webhook is still processing.
 
-                              if (error) {
-                                console.error("Error finding song:", error);
-                                alert(
-                                  "Song not found in database. Please wait a moment and try again."
-                                );
-                              } else if (songData) {
-                                // Navigate to make notes page with the existing song
-                                navigate(
-                                  `/patient/${state.patientId}/song/${songData.id}/notes`,
-                                  {
-                                    state: {
-                                      audioUrl: url,
-                                      selectedIndex: idx,
-                                    },
-                                  }
-                                );
+                              const maxAttempts = 6; // ~6 * 1s = 6 seconds
+                              let attempt = 0;
+                              let foundSong: any = null;
+
+                              while (attempt < maxAttempts && !foundSong) {
+                                const { data, error } = await supabase
+                                  .from("songs")
+                                  .select("*")
+                                  .eq("task_id", state.taskId)
+                                  .order("created_at", { ascending: true });
+
+                                if (
+                                  !error &&
+                                  Array.isArray(data) &&
+                                  data.length > 0
+                                ) {
+                                  // Titles are saved as "<title> (v1)" and "<title> (v2)" when two versions exist
+                                  const desiredTitleSuffix = ` (v${idx + 1})`;
+                                  foundSong =
+                                    data.find(
+                                      (s) =>
+                                        typeof s.title === "string" &&
+                                        s.title.endsWith(desiredTitleSuffix)
+                                    ) ||
+                                    data[idx] ||
+                                    data[data.length - 1];
+                                }
+
+                                if (!foundSong) {
+                                  await new Promise((r) => setTimeout(r, 1000));
+                                  attempt += 1;
+                                }
                               }
+
+                              if (!foundSong) {
+                                alert(
+                                  "Song not found yet. Please wait a moment and try again."
+                                );
+                                return;
+                              }
+
+                              navigate(
+                                `/patient/${state.patientId}/song/${foundSong.id}/notes`,
+                                {
+                                  state: {
+                                    // Use the URL we are previewing now; MakeNotes will resolve proxy/storage
+                                    audioUrl: url,
+                                    selectedIndex: idx,
+                                  },
+                                }
+                              );
                             }}
                           >
                             Continue to Notes

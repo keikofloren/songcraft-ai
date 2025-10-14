@@ -79,8 +79,8 @@ export default function MakeNotes() {
           if (rawUrl) {
             // Check if it's a Supabase Storage URL (use directly)
             // Otherwise proxy external URLs (Suno CDN) through backend
-            const isSupabaseStorage = rawUrl.includes('supabase.co/storage');
-            
+            const isSupabaseStorage = rawUrl.includes("supabase.co/storage");
+
             if (isSupabaseStorage) {
               // Use Supabase Storage URL directly (no proxy needed)
               console.log("[MakeNotes] Using Supabase Storage URL directly");
