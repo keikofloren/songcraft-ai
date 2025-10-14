@@ -244,25 +244,54 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.get("/proxy-audio")
-async def proxy_audio(url: str):
-    """Proxy audio from external URLs (e.g., Suno CDN) to avoid CORS and Range request issues."""
+async def proxy_audio(url: str, request: Request):
+    """Proxy audio from external URLs (e.g., Suno CDN) with Range request support."""
     try:
         print(f"[proxy-audio] Proxying URL: {url}")
-        response = requests.get(url, stream=True, timeout=30)
+        
+        # Forward Range header if present
+        headers = {}
+        if "range" in request.headers:
+            headers["Range"] = request.headers["range"]
+            print(f"[proxy-audio] Range request: {headers['Range']}")
+        
+        response = requests.get(url, headers=headers, stream=True, timeout=30)
         response.raise_for_status()
         
-        from starlette.responses import StreamingResponse
+        from starlette.responses import StreamingResponse, Response
         
+        # Get content type
+        content_type = response.headers.get("Content-Type", "audio/mpeg")
+        
+        # Handle Range responses (206 Partial Content)
+        if response.status_code == 206:
+            print(f"[proxy-audio] Returning 206 Partial Content")
+            return Response(
+                content=response.content,
+                status_code=206,
+                headers={
+                    "Content-Type": content_type,
+                    "Content-Range": response.headers.get("Content-Range", ""),
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": response.headers.get("Content-Length", ""),
+                }
+            )
+        
+        # Handle full content (200 OK)
         def iterfile():
             for chunk in response.iter_content(chunk_size=8192):
                 yield chunk
         
-        headers = {
-            "Content-Type": response.headers.get("Content-Type", "audio/mpeg"),
+        response_headers = {
+            "Content-Type": content_type,
             "Accept-Ranges": "bytes",
         }
         
-        return StreamingResponse(iterfile(), headers=headers)
+        if "Content-Length" in response.headers:
+            response_headers["Content-Length"] = response.headers["Content-Length"]
+        
+        return StreamingResponse(iterfile(), headers=response_headers)
+        
     except Exception as e:
         print(f"[proxy-audio] Error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to proxy audio: {str(e)}")
