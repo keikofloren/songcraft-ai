@@ -243,6 +243,31 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/proxy-audio")
+async def proxy_audio(url: str):
+    """Proxy audio from external URLs (e.g., Suno CDN) to avoid CORS and Range request issues."""
+    try:
+        print(f"[proxy-audio] Proxying URL: {url}")
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        from starlette.responses import StreamingResponse
+        
+        def iterfile():
+            for chunk in response.iter_content(chunk_size=8192):
+                yield chunk
+        
+        headers = {
+            "Content-Type": response.headers.get("Content-Type", "audio/mpeg"),
+            "Accept-Ranges": "bytes",
+        }
+        
+        return StreamingResponse(iterfile(), headers=headers)
+    except Exception as e:
+        print(f"[proxy-audio] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to proxy audio: {str(e)}")
+
+
 @app.post("/generate")
 def generate_music(body: GenerateRequest):
     # DEBUG: Log incoming userId

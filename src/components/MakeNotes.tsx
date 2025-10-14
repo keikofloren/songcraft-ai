@@ -74,10 +74,13 @@ export default function MakeNotes() {
 
           // If audio URL is passed from LoadingSong, use it
           // Otherwise use the audio_url from the song record
-          if (state?.audioUrl) {
-            setAudioUrl(state.audioUrl);
-          } else if (data.audio_url) {
-            setAudioUrl(data.audio_url);
+          let rawUrl = state?.audioUrl || data.audio_url;
+          
+          if (rawUrl) {
+            // Proxy external URLs through backend to avoid CORS/Range issues
+            const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+            const proxiedUrl = `${API_BASE}/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
+            setAudioUrl(proxiedUrl);
           }
         }
       } catch (error) {
