@@ -216,12 +216,12 @@ export default function MakeNotes() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Song Info Card */}
-          <Card className="border-[6px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
+          <Card className="border-[3px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
             <CardHeader className="bg-gradient-to-r from-amber-950 to-amber-900 border-b-4 border-amber-950">
               <CardTitle className="text-2xl text-white">
                 {song.title}
               </CardTitle>
-              <p className="text-sm text-amber-100">
+              <p className="mb-4 text-sm text-amber-100">
                 Created on {new Date(song.created_at).toLocaleDateString()}
               </p>
             </CardHeader>
@@ -256,8 +256,8 @@ export default function MakeNotes() {
 
           {/* Audio Player Card */}
           {audioUrl && (
-            <Card className="border-[6px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
-              <CardHeader className="bg-gradient-to-r from-amber-950 to-amber-900 border-b-4 border-amber-950">
+            <Card className="border-[3px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-amber-950 mb-4 to-amber-900 border-b-4 border-amber-950">
                 <CardTitle className="text-xl text-white">
                   Audio Player
                 </CardTitle>
@@ -321,12 +321,12 @@ export default function MakeNotes() {
           )}
 
           {/* Notes Card */}
-          <Card className="border-[6px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
+          <Card className="border-[3px] border-amber-950 hover:border-amber-900 bg-white rounded-3xl overflow-hidden shadow-xl">
             <CardHeader className="bg-gradient-to-r from-amber-950 to-amber-900 border-b-4 border-amber-950">
               <CardTitle className="text-xl text-white">
                 Session Notes
               </CardTitle>
-              <p className="text-sm text-amber-100">
+              <p className="mb-4 text-sm text-amber-100">
                 Add notes about this song and the patient's session
               </p>
             </CardHeader>
