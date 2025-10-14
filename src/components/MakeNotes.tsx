@@ -94,6 +94,8 @@ export default function MakeNotes() {
   useEffect(() => {
     if (!audioUrl || !waveformRef.current) return;
 
+    console.log("[MakeNotes] Loading audio URL:", audioUrl);
+
     const wavesurfer = WaveSurfer.create({
       container: waveformRef.current,
       waveColor: "#93c5fd",
@@ -109,6 +111,7 @@ export default function MakeNotes() {
     wavesurfer.on("ready", () => {
       const dur = wavesurfer.getDuration();
       setDuration(formatTime(Math.floor(dur)));
+      console.log("[MakeNotes] Audio loaded successfully");
     });
 
     wavesurfer.on("play", () => setPlaying(true));
@@ -120,6 +123,10 @@ export default function MakeNotes() {
     });
 
     wavesurfer.on("finish", () => setPlaying(false));
+
+    wavesurfer.on("error", (err) => {
+      console.error("[MakeNotes] WaveSurfer error:", err);
+    });
 
     wavesurfer.load(audioUrl);
     wavesurferRef.current = wavesurfer;
