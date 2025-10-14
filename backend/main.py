@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 import time
 import uuid
 from starlette.staticfiles import StaticFiles
-from supabase import create_client, Client 
+from supabase import create_client, Client
+import io 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -35,6 +36,42 @@ app = FastAPI()
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+
+def upload_audio_to_supabase(audio_url: str, song_id: int) -> str:
+    """Download audio from external URL and upload to Supabase Storage.
+    Returns the public URL of the uploaded file."""
+    try:
+        if not supabase:
+            print(f"[upload_audio] ⚠️ Supabase client not initialized, returning original URL")
+            return audio_url
+        
+        print(f"[upload_audio] Downloading audio from: {audio_url}")
+        response = requests.get(audio_url, timeout=60)
+        response.raise_for_status()
+        
+        # Generate unique filename
+        file_ext = ".mp3"  # Default to mp3, could be improved by checking Content-Type
+        filename = f"song_{song_id}_{uuid.uuid4().hex}{file_ext}"
+        
+        print(f"[upload_audio] Uploading to Supabase Storage: {filename}")
+        
+        # Upload to Supabase Storage bucket "songs"
+        result = supabase.storage.from_("songs").upload(
+            filename,
+            response.content,
+            file_options={"content-type": "audio/mpeg"}
+        )
+        
+        # Get public URL
+        public_url = supabase.storage.from_("songs").get_public_url(filename)
+        print(f"[upload_audio] ✅ Upload successful: {public_url}")
+        
+        return public_url
+    except Exception as e:
+        print(f"[upload_audio] ❌ Error: {e}")
+        # Fall back to original URL if upload fails
+        return audio_url
 
 # CORS for frontend
 app.add_middleware(
@@ -817,6 +854,16 @@ async def suno_webhook(request: Request):
                         print(f"[webhook DEBUG] Attempting insert #{i+1} with data: {insert_data}")
                         result = supabase.table("songs").insert(insert_data).execute()
                         print(f"[webhook] ✅ Successfully inserted song #{i+1} for task_id={task_id}")
+                        
+                        # Upload audio to Supabase Storage for permanent storage
+                        if result.data and len(result.data) > 0:
+                            song_id = result.data[0]["id"]
+                            permanent_url = upload_audio_to_supabase(audio_url, song_id)
+                            
+                            # Update the song record with the permanent URL
+                            if permanent_url != audio_url:
+                                supabase.table("songs").update({"audio_url": permanent_url}).eq("id", song_id).execute()
+                                print(f"[webhook] 🔄 Updated song #{song_id} with permanent storage URL")
                 
                         # Clean up the metadata ONLY after successful insert with audio URLs
                         del pending_metadata[task_id]
