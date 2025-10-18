@@ -273,7 +273,9 @@ export default function MotifAndInstrumentation() {
           uploadUrl: ideaUploadUrl,
           instrumental: state.songType !== "lyrics",
           prompt: promptStr,
-          style: style || (state.songType === "lyrics" ? "Pop" : "Ambient"),
+          style:
+            style + "BPM of " + tempoBpm ||
+            (state.songType === "lyrics" ? "Pop" : "Ambient"),
           title: title || "Untitled",
           model: "V5",
           continueAt: ideaDurationSec ?? undefined,
@@ -308,7 +310,9 @@ export default function MotifAndInstrumentation() {
         console.log("[MotifAndInstrumentation] 🔍 Full state object:", state);
         const data = await generateTrack({
           prompt: promptStr,
-          style: style || (state.songType === "lyrics" ? "Pop" : "Ambient"),
+          style:
+            style + "BPM of " + tempoBpm ||
+            (state.songType === "lyrics" ? "Pop" : "Ambient"),
           title: title || "Untitled",
           customMode: false,
           instrumental: state.songType !== "lyrics",
