@@ -1,6 +1,14 @@
 import { useState, useRef } from "react";
 import { Button } from "./ui/button";
-import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
+import {
+  Upload,
+  X,
+  Image as ImageIcon,
+  Loader2,
+  Palette,
+  FileImage,
+} from "lucide-react";
+import DrawingCanvas from "./DrawingCanvas";
 
 interface DrawingUploadProps {
   onImageAnalyzed: (analysis: ImageAnalysis) => void;
@@ -33,6 +41,7 @@ export default function DrawingUpload({
 }: DrawingUploadProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [inputMode, setInputMode] = useState<"upload" | "draw">("upload");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,8 +99,27 @@ export default function DrawingUpload({
     }
   };
 
+  const handleCanvasImage = async (blob: Blob) => {
+    try {
+      // Create a preview URL from the blob
+      const previewUrl = URL.createObjectURL(blob);
+      setPreview(previewUrl);
+
+      // Convert blob to File for analysis
+      const file = new File([blob], "drawing.png", { type: "image/png" });
+      await analyzeImage(file);
+    } catch (error: any) {
+      onError?.(error?.message || "Failed to process drawing");
+    }
+  };
+
   const handleClear = () => {
+    // Clean up preview URL if it exists
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
     setPreview(null);
+    setInputMode("upload");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -99,30 +127,58 @@ export default function DrawingUpload({
 
   return (
     <div className="space-y-4">
+      {/* Mode Selector */}
+      {!preview && (
+        <div className="flex justify-center gap-2">
+          <Button
+            variant={inputMode === "upload" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setInputMode("upload")}
+            className="flex items-center gap-2"
+          >
+            <FileImage className="h-4 w-4" />
+            Upload Image
+          </Button>
+          <Button
+            variant={inputMode === "draw" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setInputMode("draw")}
+            className="flex items-center gap-2"
+          >
+            <Palette className="h-4 w-4" />
+            Draw Here
+          </Button>
+        </div>
+      )}
+
       <div className="border-2 border-dashed border-brown-300 rounded-lg p-6 bg-amber-50/30">
         {!preview ? (
-          <div className="text-center">
-            <ImageIcon className="h-12 w-12 mx-auto mb-3 text-brown-400" />
-            <p className="text-sm text-brown-700 mb-4">
-              Upload a drawing or curve to analyze its musical characteristics
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              variant="outline"
-              disabled={analyzing}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              Choose Image
-            </Button>
-            <p className="text-xs text-brown-500 mt-2">PNG or JPG, max 5MB</p>
-          </div>
+          inputMode === "upload" ? (
+            <div className="text-center">
+              <ImageIcon className="h-12 w-12 mx-auto mb-3 text-brown-400" />
+              <p className="text-sm text-brown-700 mb-4">
+                Upload a drawing or curve to analyze its musical characteristics
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                variant="outline"
+                disabled={analyzing}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Choose Image
+              </Button>
+              <p className="text-xs text-brown-500 mt-2">PNG or JPG, max 5MB</p>
+            </div>
+          ) : (
+            <DrawingCanvas onImageReady={handleCanvasImage} onError={onError} />
+          )
         ) : (
           <div className="space-y-3">
             <div className="relative">

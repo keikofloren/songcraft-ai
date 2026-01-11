@@ -77,24 +77,13 @@ export default function MakeNotes() {
           let rawUrl = state?.audioUrl || data.audio_url;
 
           if (rawUrl) {
-            // Check if it's a Supabase Storage URL (use directly)
-            // Otherwise proxy external URLs (Suno CDN) through backend
-            const isSupabaseStorage = rawUrl.includes("supabase.co/storage");
-
-            if (isSupabaseStorage) {
-              // Use Supabase Storage URL directly (no proxy needed)
-              console.log("[MakeNotes] Using Supabase Storage URL directly");
-              setAudioUrl(rawUrl);
-            } else {
-              // Proxy external URLs through backend to avoid CORS/Range issues
-              const API_BASE =
-                import.meta.env.VITE_API_URL || "http://localhost:8000";
-              const proxiedUrl = `${API_BASE}/proxy-audio?url=${encodeURIComponent(
-                rawUrl
-              )}`;
-              console.log("[MakeNotes] Proxying external URL through backend");
-              setAudioUrl(proxiedUrl);
-            }
+            // Proxy external URLs through backend to avoid CORS/Range issues
+            const API_BASE =
+              import.meta.env.VITE_API_URL || "http://localhost:8000";
+            const proxiedUrl = `${API_BASE}/proxy-audio?url=${encodeURIComponent(
+              rawUrl
+            )}`;
+            setAudioUrl(proxiedUrl);
           }
         }
       } catch (error) {
