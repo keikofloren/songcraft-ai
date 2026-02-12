@@ -32,6 +32,8 @@ export default function TherapistLogin({
   const [message, setMessage] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
+    console.log("[Login] handler fired");
+    alert("Login clicked"); // temporary
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -44,6 +46,31 @@ export default function TherapistLogin({
       });
 
       if (error) throw error;
+      if (!data.user) throw new Error("Login succeeded but no user returned");
+
+      const uid = data.user.id;
+    
+    // Check if therapist profile exists
+    const { data: therapist, error: therapistError } = await supabase
+      .from("therapists")
+      .select("id")
+      .eq("id", uid)
+      .maybeSingle();
+
+    if (therapistError) throw therapistError;
+
+    // Create therapist profile if it doesn't exist
+    if (!therapist) {
+      const { error: createError } = await supabase
+        .from("therapists")
+        .insert({
+          id: uid,
+          first_name: data.user.user_metadata?.first_name ?? "First",
+          last_name: data.user.user_metadata?.last_name ?? "Last",
+          email: data.user.email,
+        });
+      if (createError) throw createError;
+    }
 
       if (data.user) {
         // Save userId to localStorage for backwards compatibility
@@ -88,34 +115,21 @@ export default function TherapistLogin({
       if (data.user) {
         console.log("[Signup] User created:", data.user.id);
 
-        // Create therapist profile
-        const { error: profileError } = await supabase
-          .from("therapists")
-          .insert({
-            id: data.user.id,
-            first_name: firstName,
-            last_name: lastName,
-          });
-
-        if (profileError) {
-          console.error("[Signup] Profile creation error:", profileError);
-          // Don't throw - user account was created successfully
-        } else {
-          console.log("[Signup] Profile created successfully");
-        }
-
         setMessage(
           "Account created! Please check your email to verify your account."
         );
 
+        await supabase.auth.signOut();
+        localStorage.removeItem("hs_user_id");
+
         // Auto-login if email confirmation is disabled
-        if (data.session) {
+        /*if (data.session) {
           console.log("[Signup] Auto-login successful");
           localStorage.setItem("hs_user_id", data.user.id);
           onLoginSuccess(data.user.id);
         } else {
           console.log("[Signup] Email confirmation required - no session");
-        }
+        }*/
       }
     } catch (err: any) {
       console.error("[Signup] Error:", err);
