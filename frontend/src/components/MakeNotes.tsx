@@ -115,6 +115,8 @@ export default function MakeNotes() {
 
     const wavesurfer = WaveSurfer.create({
       container: waveformRef.current,
+      // Force WebAudio backend to avoid MediaElement Range quirks
+      backend: "WebAudio",
       waveColor: "#93c5fd",
       progressColor: "#3b82f6",
       cursorColor: "#1e40af",
@@ -145,10 +147,41 @@ export default function MakeNotes() {
       console.error("[MakeNotes] WaveSurfer error:", err);
     });
 
-    wavesurfer.load(audioUrl);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        // Fetch the proxied audio and load as Blob
+        const resp = await fetch(audioUrl, {
+          // Optional: force fresh
+          cache: "no-store",
+        });
+
+        if (!resp.ok) {
+          throw new Error(`Audio fetch failed: ${resp.status}`);
+        }
+
+        const blob = await resp.blob();
+        if (cancelled) return;
+
+        // Prefer loadBlob when available (WaveSurfer v7)
+        const anyWs = wavesurfer as any;
+        if (typeof anyWs.loadBlob === "function") {
+          anyWs.loadBlob(blob);
+        } else {
+          // Fallback: create an object URL and load it
+          const objUrl = URL.createObjectURL(blob);
+          anyWs.load(objUrl);
+        }
+      } catch (e) {
+        console.error("[MakeNotes] Failed to load audio:", e);
+      }
+    })();
+
     wavesurferRef.current = wavesurfer;
 
     return () => {
+      cancelled = true;
       wavesurfer.destroy();
     };
   }, [audioUrl]);
