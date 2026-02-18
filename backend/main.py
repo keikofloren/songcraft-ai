@@ -824,96 +824,112 @@ async def suno_webhook(request: Request):
     print(json.dumps(payload, indent=2))
     
     # Extract audio URLs from payload
-    audio_urls = []
+    audio_items = []  # list of {"audio_url": ..., "stream_audio_url": ...}
+
     try:
         data = payload.get("data")
         print(f"[webhook DEBUG] 🔍 data type: {type(data)}")
-        
+
         # Handle nested structure: payload.data.data is the actual list
         if isinstance(data, dict):
-            data = data.get("data")  # Get the nested "data" list
+            data = data.get("data")
             print(f"[webhook DEBUG] 🔍 Nested data type: {type(data)}")
-        
+
         if isinstance(data, list):
             for i, item in enumerate(data):
                 print(f"[webhook DEBUG] 🔍 data[{i}] keys: {list(item.keys()) if isinstance(item, dict) else 'not a dict'}")
-                if isinstance(item, dict):
-                    url = item.get("audio_url") or item.get("stream_audio_url")
-                    print(f"[webhook DEBUG] 🔍 data[{i}] audio_url: {item.get('audio_url')}")
-                    print(f"[webhook DEBUG] 🔍 data[{i}] stream_audio_url: {item.get('stream_audio_url')}")
-                    if url:
-                        audio_urls.append(url)
-                        print(f"[webhook DEBUG] ✅ Added audio URL: {url}")
+                if not isinstance(item, dict):
+                    continue
+
+                primary_audio = item.get("audio_url")          # aiquickdraw
+                stream_audio = item.get("stream_audio_url")    # removeai
+
+                print(f"[webhook DEBUG] 🔍 data[{i}] audio_url: {primary_audio}")
+                print(f"[webhook DEBUG] 🔍 data[{i}] stream_audio_url: {stream_audio}")
+
+                if primary_audio or stream_audio:
+                    audio_items.append({
+                        "audio_url": primary_audio,
+                        "stream_audio_url": stream_audio,
+                    })
+                    print(f"[webhook DEBUG] ✅ Added audio item #{i}: {audio_items[-1]}")
+
     except Exception as e:
         print(f"[webhook] ⚠️  Error extracting audio URLs: {e}")
         import traceback
         traceback.print_exc()
+
     
     # Insert into database if we have metadata for this task
     if task_id in pending_metadata and supabase is not None:
         try:
             metadata = pending_metadata[task_id]
             print(f"[webhook DEBUG] metadata={metadata}")
-            print(f"[webhook DEBUG] extracted audio_urls={audio_urls}")
-            
-            # Only insert if user_id is provided AND we have audio URLs
-            if metadata.get("user_id"):
-                if len(audio_urls) > 0:
-                # Insert a song record for EACH audio URL
-                # This is because Suno generates 2 versions
-                    for i, audio_url in enumerate(audio_urls):
-                        insert_data = {
-                            "user_id": metadata["user_id"],
-                            "patient_id": metadata.get("patient_id"),
-                            "title": metadata.get("title", "Untitled") + (f" (v{i+1})" if len(audio_urls) > 1 else ""),
-                            "with_lyrics": metadata.get("with_lyrics"),
-                            "form": metadata.get("form"),
-                            "moods": metadata.get("moods"),
-                            "style": metadata.get("style"),
-                            "tempo_bpm": metadata.get("tempo_bpm"),
-                            "prompt": metadata.get("prompt"),
-                            "notes": metadata.get("notes"),
-                            "vocal_gender": metadata.get("vocal_gender"),
-                            "origin": metadata.get("origin", "webhook"),
-                            "audio_url": audio_url,
-                            "task_id": task_id
-                        }
-                        inserted = True
-                        
-                        print(f"[webhook DEBUG] Attempting insert #{i+1} with data: {insert_data}")
-                        result = supabase.table("songs").insert(insert_data).execute()
-                        print(f"[webhook] ✅ Successfully inserted song #{i+1} for task_id={task_id}")
-                        
-                        # Upload audio to Supabase Storage for permanent storage
-                        if result.data and len(result.data) > 0:
-                            song_id = result.data[0]["id"]
-                            permanent_url = upload_audio_to_supabase(audio_url, song_id)
-                            
-                            # Update the song record with the permanent URL
-                            if permanent_url != audio_url:
-                                supabase.table("songs").update({"audio_url": permanent_url}).eq("id", song_id).execute()
-                                print(f"[webhook] 🔄 Updated song #{song_id} with permanent storage URL")
+            print(f"[webhook DEBUG] extracted audio_items={audio_items}")
 
-                        if inserted:
-                            # Clean up the metadata ONLY after successful insert with audio URLs
-                            del pending_metadata[task_id]
-                            print(f"[webhook] 🗑️  Cleaned up metadata for task_id={task_id}")
-                else:
-                    print(f"[webhook] ⏳ No audio URLs yet for task_id={task_id}, keeping metadata for next webhook call")
-            else:
-                print(f"[webhook] ❌ Skipping insert for task_id={task_id} - no user_id (metadata.user_id={metadata.get('user_id')})")
+            # Only insert if user_id exists
+            if not metadata.get("user_id"):
+                print(f"[webhook] ❌ Skipping insert for task_id={task_id} - no user_id")
+                return {"ok": True, "task_id": task_id}
+
+            if len(audio_items) == 0:
+                print(f"[webhook] ⏳ No audio URLs yet for task_id={task_id}, keeping metadata for next webhook call")
+                return {"ok": True, "task_id": task_id}
+
+            # Insert a song record for EACH audio item (Suno generates 2 versions)
+            for i, audio in enumerate(audio_items):
+                primary_audio = audio.get("audio_url")          # aiquickdraw
+                stream_audio = audio.get("stream_audio_url")    # removeai
+                chosen_audio_url = primary_audio or stream_audio
+
+                insert_data = {
+                    "user_id": metadata["user_id"],
+                    "patient_id": metadata.get("patient_id"),
+                    "title": metadata.get("title", "Untitled") + (f" (v{i+1})" if len(audio_items) > 1 else ""),
+                    "with_lyrics": metadata.get("with_lyrics"),
+                    "form": metadata.get("form"),
+                    "moods": metadata.get("moods"),
+                    "style": metadata.get("style"),
+                    "tempo_bpm": metadata.get("tempo_bpm"),
+                    "prompt": metadata.get("prompt"),
+                    "notes": metadata.get("notes"),
+                    "vocal_gender": metadata.get("vocal_gender"),
+                    "origin": metadata.get("origin", "webhook"),
+                    "audio_url": chosen_audio_url,         # PRIMARY (aiquickdraw preferred)
+                    "stream_audio_url": stream_audio,      # BACKUP (removeai)
+                    "task_id": task_id
+                }
+
+                print(f"[webhook DEBUG] Attempting insert #{i+1} with data: {insert_data}")
+                result = supabase.table("songs").insert(insert_data).execute()
+                print(f"[webhook] ✅ Successfully inserted song #{i+1} for task_id={task_id}")
+
+                # Upload PRIMARY audio to Supabase Storage for permanent storage
+                if result.data and len(result.data) > 0 and chosen_audio_url:
+                    song_id = result.data[0]["id"]
+                    permanent_url = upload_audio_to_supabase(chosen_audio_url, song_id)
+
+                    # Update the song record with the permanent URL
+                    if permanent_url and permanent_url != chosen_audio_url:
+                        supabase.table("songs").update({"audio_url": permanent_url}).eq("id", song_id).execute()
+                        print(f"[webhook] 🔄 Updated song #{song_id} with permanent storage URL")
+
+            # Clean up metadata after successful inserts
+            del pending_metadata[task_id]
+            print(f"[webhook] 🗑️  Cleaned up metadata for task_id={task_id}")
+
         except Exception as e:
             print(f"[webhook] ❌ Error inserting song: {e}")
             import traceback
             traceback.print_exc()
+
     else:
         if task_id not in pending_metadata:
             print(f"[webhook] ⚠️  No metadata found for task_id={task_id}")
         if supabase is None:
             print(f"[webhook] ⚠️  Supabase client is None - check SUPABASE_URL and SUPABASE_KEY in .env")
-    
-    return {"ok": True, "task_id": task_id}
 
+    return {"ok": True, "task_id": task_id}
 
 @app.get("/webhook/status")
 def webhook_status_endpoint():
