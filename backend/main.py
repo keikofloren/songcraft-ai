@@ -212,8 +212,8 @@ def upload_extend(body: UploadExtendRequest):
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {k: v for k, v in body.model_dump().items() if v is not None}
-    payload["model"] = "V4"
+    payload = body.model_dump(exclude_none=True)
+    payload.setdefault("model", "V5")
     if "style" in payload and isinstance(payload["style"], str):
         s = payload["style"].strip()
         if "BPM of" in s:
