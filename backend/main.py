@@ -205,6 +205,14 @@ def upload_extend(body: UploadExtendRequest):
     }
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
     payload["model"] = "V4"
+    if "style" in payload and isinstance(payload["style"], str):
+        s = payload["style"].strip()
+        if "BPM of" in s:
+            s = s.replace("BPM of", "").strip()
+        if not s:
+            payload.pop("style", None)
+        else:
+            payload["style"] = s
     if not payload.get("callBackUrl"):
         public_base = os.getenv("PUBLIC_BASE_URL")
         if public_base:
@@ -354,7 +362,16 @@ def generate_music(body: GenerateRequest):
 
     # Convert Pydantic model to dict and drop None fields
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
-    payload["model"] = "V4"  
+    payload["model"] = "V4" 
+
+    if "style" in payload and isinstance(payload["style"], str):
+        s = payload["style"].strip()
+        if "BPM of" in s:
+            s = s.replace("BPM of", "").strip()
+        if not s:
+            payload.pop("style", None)
+        else:
+            payload["style"] = s
     
     # DEBUG: Log what we're sending to Suno
     print(f"[generate] 🔍 Sending to Suno API:")
