@@ -299,54 +299,51 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.get("/proxy-audio")
-async def proxy_audio(url: str, request: Request):
-    """Proxy audio from external URLs (e.g., Suno CDN) with Range request support."""
+async def proxy_audio(request: Request, url: str):
     try:
         print(f"[proxy-audio] Proxying URL: {url}")
-        
-        # Forward Range header if present
+
+        range_header = request.headers.get("range")
         headers = {}
-        if "range" in request.headers:
-            headers["Range"] = request.headers["range"]
-            print(f"[proxy-audio] Range request: {headers['Range']}")
-        
-        response = requests.get(url, headers=headers, stream=True, timeout=30)
-        response.raise_for_status()
-        
-        from starlette.responses import StreamingResponse, Response
-        
-        # Get content type
-        content_type = response.headers.get("Content-Type", "audio/mpeg")
-        
-        # Handle Range responses (206 Partial Content)
-        if response.status_code == 206:
-            print(f"[proxy-audio] Returning 206 Partial Content")
-            return Response(
-                content=response.content,
-                status_code=206,
-                headers={
-                    "Content-Type": content_type,
-                    "Content-Range": response.headers.get("Content-Range", ""),
-                    "Accept-Ranges": "bytes",
-                    "Content-Length": response.headers.get("Content-Length", ""),
-                }
-            )
-        
-        # Handle full content (200 OK)
+        if range_header:
+            headers["Range"] = range_header
+            print(f"[proxy-audio] Range request: {range_header}")
+
+        upstream = requests.get(url, headers=headers, stream=True, timeout=30)
+        upstream.raise_for_status()
+
+        content_type = upstream.headers.get("Content-Type", "audio/mpeg")
+
+        # Prepare passthrough headers
+        resp_headers = {"Content-Type": content_type}
+
+        # If upstream really supports ranges, it will return 206 and Content-Range
+        if upstream.status_code == 206 and upstream.headers.get("Content-Range"):
+            resp_headers["Accept-Ranges"] = "bytes"
+            resp_headers["Content-Range"] = upstream.headers["Content-Range"]
+            if upstream.headers.get("Content-Length"):
+                resp_headers["Content-Length"] = upstream.headers["Content-Length"]
+        else:
+            # If client asked for Range but upstream ignored it (200), don't claim range support
+            # This prevents the browser/wavesurfer from assuming seeking will work.
+            if not range_header:
+                # Only advertise ranges when client didn't ask and upstream says it can
+                if upstream.headers.get("Accept-Ranges") == "bytes":
+                    resp_headers["Accept-Ranges"] = "bytes"
+            if upstream.headers.get("Content-Length"):
+                resp_headers["Content-Length"] = upstream.headers["Content-Length"]
+
         def iterfile():
-            for chunk in response.iter_content(chunk_size=8192):
-                yield chunk
-        
-        response_headers = {
-            "Content-Type": content_type,
-            "Accept-Ranges": "bytes",
-        }
-        
-        if "Content-Length" in response.headers:
-            response_headers["Content-Length"] = response.headers["Content-Length"]
-        
-        return StreamingResponse(iterfile(), headers=response_headers)
-        
+            for chunk in upstream.iter_content(chunk_size=1024 * 64):
+                if chunk:
+                    yield chunk
+
+        return StreamingResponse(
+            iterfile(),
+            status_code=upstream.status_code,
+            headers=resp_headers
+        )
+
     except Exception as e:
         print(f"[proxy-audio] Error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to proxy audio: {str(e)}")
