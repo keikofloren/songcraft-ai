@@ -326,13 +326,25 @@ async def proxy_audio(request: Request, url: str):
         print(f"[proxy-audio] Proxying URL: {url}")
 
         range_header = request.headers.get("range")
-        headers = {}
+        headers = {
+            "User-Agent": request.headers.get("user-agent")
+                or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+            "Accept": request.headers.get("accept") or "*/*",
+            "Accept-Encoding": "identity",
+            "Referer": os.getenv("PUBLIC_BASE_URL", "http://localhost:8000"),
+        }
+
         if range_header:
             headers["Range"] = range_header
             print(f"[proxy-audio] Range request: {range_header}")
 
-        upstream = requests.get(url, headers=headers, stream=True, timeout=30)
-        upstream.raise_for_status()
+        upstream = requests.get(
+            url,
+            headers=headers,
+            stream=True,
+            timeout=30,
+            allow_redirects=True,
+        )
 
         content_type = upstream.headers.get("Content-Type", "audio/mpeg")
 
@@ -920,11 +932,12 @@ async def suno_webhook(request: Request):
                 primary_audio = audio.get("audio_url")
                 stream_audio = audio.get("stream_audio_url")
 
-                chosen_audio_url = primary_audio or stream_audio
-                if not chosen_audio_url:
-                    print(f"[webhook] ⚠️ Skipping insert #{i+1}: no aiquickdraw audio_url yet (clip_id={clip_id})")
+                # Prefer primary audio_url. If only stream_audio_url exists, wait for a later webhook.
+                if not primary_audio and stream_audio:
+                    print(f"[webhook] ⏳ Only stream_audio_url present (clip_id={clip_id}); waiting for primary audio_url.")
                     continue
 
+                chosen_audio_url = primary_audio
                 stable_url = upload_audio_to_supabase(chosen_audio_url)
 
                 insert_data = {

@@ -77,22 +77,20 @@ export default function MakeNotes() {
           const candidateFromDb = data.audio_url as string | undefined;
           const candidateStream = (data as any).stream_audio_url as string | undefined;
 
-          const isRemoveAI = (u?: string) => !!u && u.includes("musicfile.removeai.ai");
-
           let rawUrl =
             candidateFromState ||
-            (candidateFromDb && !isRemoveAI(candidateFromDb) ? candidateFromDb : undefined) ||
-            (candidateStream && !isRemoveAI(candidateStream) ? candidateStream : undefined);
+            candidateFromDb ||
+            candidateStream;
 
-          // If still nothing playable, don't load WaveSurfer
           if (!rawUrl) {
-            console.warn("[MakeNotes] No playable audio URL found (removeai is not supported for playback).");
+            console.warn("[MakeNotes] No audio URL found.");
             setAudioUrl(null);
             return;
           }
 
           console.log("[MakeNotes] picked rawUrl:", rawUrl);
-          const proxiedUrl = `/api/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
+          const API_BASE = import.meta.env.VITE_API_BASE_URL; // e.g. "http://52.62.46.27:8000"
+          const proxiedUrl = `${API_BASE}/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
           setAudioUrl(proxiedUrl);
         }
       } catch (error) {
