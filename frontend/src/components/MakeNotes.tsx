@@ -77,9 +77,6 @@ export default function MakeNotes() {
           const candidateFromDb = data.audio_url;
           const candidateStream = (data as any).stream_audio_url;
 
-          const isRemoveAI = (u?: string) =>
-            !!u && u.includes("musicfile.removeai.ai");
-
           const isAiQuickDraw = (u?: string) =>
             !!u && u.includes("tempfile.aiquickdraw.com");
 
