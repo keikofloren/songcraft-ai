@@ -47,39 +47,54 @@ def debug_version():
     }
 
 
-def upload_audio_to_supabase(audio_url: str, song_id: int) -> str:
-    """Download audio from external URL and upload to Supabase Storage.
-    Returns the public URL of the uploaded file."""
+def upload_audio_to_supabase(audio_url: str, key_prefix: str = "songs") -> str:
+    """
+    Download audio from external URL and upload to Supabase Storage.
+    Returns public URL. Falls back to original URL if upload fails.
+    """
     try:
         if not supabase:
-            print(f"[upload_audio] ⚠️ Supabase client not initialized, returning original URL")
+            print("[upload_audio] ⚠️ Supabase client not initialized, returning original URL")
             return audio_url
-        
+
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "*/*",
+        }
+
         print(f"[upload_audio] Downloading audio from: {audio_url}")
-        response = requests.get(audio_url, timeout=60)
-        response.raise_for_status()
-        
-        # Generate unique filename
-        file_ext = ".mp3"  # Default to mp3, could be improved by checking Content-Type
-        filename = f"song_{song_id}_{uuid.uuid4().hex}{file_ext}"
-        
-        print(f"[upload_audio] Uploading to Supabase Storage: {filename}")
-        
-        # Upload to Supabase Storage bucket "songs"
-        result = supabase.storage.from_("songs").upload(
-            filename,
-            response.content,
-            file_options={"content-type": "audio/mpeg"}
+        r = requests.get(
+            audio_url,
+            headers=headers,
+            timeout=60,
+            allow_redirects=True,
+            stream=True,
         )
-        
-        # Get public URL
+        r.raise_for_status()
+
+        ct = r.headers.get("Content-Type", "").lower()
+        if "text/html" in ct:
+            raise Exception(f"Upstream returned HTML instead of audio. content-type={ct}")
+
+        # read bytes once
+        audio_bytes = r.content
+
+        # filename
+        filename = f"{key_prefix}/{uuid.uuid4().hex}.mp3"
+
+        print(f"[upload_audio] Uploading to Supabase Storage: {filename}")
+        supabase.storage.from_("songs").upload(
+            filename,
+            audio_bytes,
+            file_options={"content-type": "audio/mpeg"},
+        )
+
         public_url = supabase.storage.from_("songs").get_public_url(filename)
         print(f"[upload_audio] ✅ Upload successful: {public_url}")
-        
         return public_url
+
     except Exception as e:
         print(f"[upload_audio] ❌ Error: {e}")
-        # Fall back to original URL if upload fails
         return audio_url
 
 # CORS for frontend
@@ -910,6 +925,8 @@ async def suno_webhook(request: Request):
                     print(f"[webhook] ⚠️ Skipping insert #{i+1}: no aiquickdraw audio_url yet (clip_id={clip_id})")
                     continue
 
+                stable_url = upload_audio_to_supabase(chosen_audio_url)
+
                 insert_data = {
                     "user_id": metadata["user_id"],
                     "patient_id": metadata.get("patient_id"),
@@ -923,7 +940,7 @@ async def suno_webhook(request: Request):
                     "notes": metadata.get("notes"),
                     "vocal_gender": metadata.get("vocal_gender"),
                     "origin": metadata.get("origin", "webhook"),
-                    "audio_url": chosen_audio_url,
+                    "audio_url": stable_url,
                     "stream_audio_url": stream_audio,
                     "task_id": task_id,     # the webhook's task id (grouping)
                     "suno_clip_id": clip_id, # unique per clip
