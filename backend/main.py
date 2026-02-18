@@ -37,6 +37,14 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+@app.get("/debug/version")
+def debug_version():
+    return {
+        "version": "2026-02-18-force-v4-1",
+        "default_model_generate": GenerateRequest.model_fields["model"].default,
+        "default_model_upload_extend": UploadExtendRequest.model_fields["model"].default,
+    }
+
 
 def upload_audio_to_supabase(audio_url: str, song_id: int) -> str:
     """Download audio from external URL and upload to Supabase Storage.
