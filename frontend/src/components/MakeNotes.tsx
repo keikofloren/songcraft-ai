@@ -77,12 +77,8 @@ export default function MakeNotes() {
           let rawUrl = state?.audioUrl || data.audio_url;
 
           if (rawUrl) {
-            // Proxy external URLs through backend to avoid CORS/Range issues
-            const API_BASE =
-              import.meta.env.VITE_API_URL || "http://localhost:8000";
-            const proxiedUrl = `${API_BASE}/proxy-audio?url=${encodeURIComponent(
-              rawUrl
-            )}`;
+            // Proxy through Vercel to avoid Mixed Content (HTTPS page calling HTTP EC2)
+            const proxiedUrl = `/api/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
             setAudioUrl(proxiedUrl);
           }
         }
