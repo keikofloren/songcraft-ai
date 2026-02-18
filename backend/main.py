@@ -851,6 +851,7 @@ async def suno_webhook(request: Request):
                     audio_items.append({
                         "audio_url": primary_audio,
                         "stream_audio_url": stream_audio,
+                        "clip_id": str(clip_id) if clip_id else None,
                     })
                     print(f"[webhook DEBUG] ✅ Added audio item #{i}: {audio_items[-1]}")
 
@@ -880,6 +881,7 @@ async def suno_webhook(request: Request):
             for i, audio in enumerate(audio_items):
                 primary_audio = audio.get("audio_url")          # aiquickdraw
                 stream_audio = audio.get("stream_audio_url")    # removeai
+                clip_id = item.get("id") 
                 chosen_audio_url = primary_audio or stream_audio
 
                 insert_data = {
