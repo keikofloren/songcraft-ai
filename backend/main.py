@@ -841,17 +841,22 @@ async def suno_webhook(request: Request):
                 if not isinstance(item, dict):
                     continue
 
-                primary_audio = item.get("audio_url")          # aiquickdraw
-                stream_audio = item.get("stream_audio_url")    # removeai
+                # Always define clip_id first (prevents 'unbound local' crash)
+                clip_id = item.get("id")  # Suno per-clip id (unique for v1/v2)
 
+                primary_audio = item.get("audio_url") or None         # aiquickdraw (sometimes empty)
+                stream_audio = item.get("stream_audio_url") or None   # removeai
+
+                print(f"[webhook DEBUG] 🔍 data[{i}] id: {clip_id}")
                 print(f"[webhook DEBUG] 🔍 data[{i}] audio_url: {primary_audio}")
                 print(f"[webhook DEBUG] 🔍 data[{i}] stream_audio_url: {stream_audio}")
 
+                # Only append if we have at least one URL
                 if primary_audio or stream_audio:
                     audio_items.append({
+                        "clip_id": str(clip_id) if clip_id else None,
                         "audio_url": primary_audio,
                         "stream_audio_url": stream_audio,
-                        "clip_id": str(clip_id) if clip_id else None,
                     })
                     print(f"[webhook DEBUG] ✅ Added audio item #{i}: {audio_items[-1]}")
 
@@ -882,7 +887,11 @@ async def suno_webhook(request: Request):
                 primary_audio = audio.get("audio_url")          # aiquickdraw
                 stream_audio = audio.get("stream_audio_url")    # removeai
                 clip_id = item.get("id") 
-                chosen_audio_url = primary_audio or stream_audio
+                chosen_audio_url = primary_audio  # only aiquickdraw is allowed for playback
+
+                if not chosen_audio_url:
+                    print(f"[webhook] ⚠️ Skipping insert #{i+1}: no aiquickdraw audio_url yet (clip_id={clip_id})")
+                    continue
 
                 insert_data = {
                     "user_id": metadata["user_id"],
