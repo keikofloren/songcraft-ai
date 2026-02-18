@@ -370,7 +370,8 @@ def generate_music(body: GenerateRequest):
     }
 
     # Convert Pydantic model to dict and drop None fields
-    payload = {k: v for k, v in body.model_dump().items() if v is not None}
+    payload = body.model_dump(exclude_none=True)
+    payload.setdefault("model", "V5")
 
     if "style" in payload and isinstance(payload["style"], str):
         s = payload["style"].strip()
