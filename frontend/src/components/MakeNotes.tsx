@@ -74,28 +74,26 @@ export default function MakeNotes() {
           setNotes(data.notes || "");
 
           const candidateFromState = state?.audioUrl;
-          const candidateFromDb = data.audio_url;
-          const candidateStream = (data as any).stream_audio_url;
+          const candidateFromDb = data.audio_url as string | undefined;
+          const candidateStream = (data as any).stream_audio_url as string | undefined;
 
-          const isAiQuickDraw = (u?: string) =>
-            !!u && u.includes("tempfile.aiquickdraw.com");
+          const isRemoveAI = (u?: string) => !!u && u.includes("musicfile.removeai.ai");
 
-          // Choose best source for WaveSurfer (prefer aiquickdraw)
           let rawUrl =
             candidateFromState ||
-            (isAiQuickDraw(candidateFromDb) ? candidateFromDb : undefined) ||
-            (isAiQuickDraw(candidateStream) ? candidateStream : undefined) ||
-            candidateFromDb ||
-            candidateStream;
+            (candidateFromDb && !isRemoveAI(candidateFromDb) ? candidateFromDb : undefined) ||
+            (candidateStream && !isRemoveAI(candidateStream) ? candidateStream : undefined);
 
-          if (rawUrl) {
-            console.log("[MakeNotes] picked rawUrl:", rawUrl);
-
-            // Proxy through Vercel to avoid Mixed Content
-            const proxiedUrl = `/api/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
-            setAudioUrl(proxiedUrl);
+          // If still nothing playable, don't load WaveSurfer
+          if (!rawUrl) {
+            console.warn("[MakeNotes] No playable audio URL found (removeai is not supported for playback).");
+            setAudioUrl(null);
+            return;
           }
 
+          console.log("[MakeNotes] picked rawUrl:", rawUrl);
+          const proxiedUrl = `/api/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
+          setAudioUrl(proxiedUrl);
         }
       } catch (error) {
         console.error("Error:", error);
