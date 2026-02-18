@@ -94,7 +94,7 @@ class GenerateRequest(BaseModel):
     title: str | None = Field(None, description="Optional track title")
     customMode: bool | None = Field(None)
     instrumental: bool | None = Field(None)
-    model: str | None = Field("V4")
+    model: str | None = Field("V5")
     negativeTags: str | None = Field(None)
     vocalGender: str | None = Field(None)
     styleWeight: float | None = Field(None)
@@ -119,7 +119,7 @@ class UploadExtendRequest(BaseModel):
     style: Optional[str] = Field(None)
     title: Optional[str] = Field(None)
     continueAt: Optional[int] = Field(None)
-    model: Optional[str] = Field("V4")
+    model: Optional[str] = Field("V5")
     negativeTags: Optional[str] = Field(None)
     vocalGender: Optional[str] = Field(None)
     styleWeight: Optional[float] = Field(None)
@@ -348,6 +348,7 @@ async def proxy_audio(url: str, request: Request):
 def generate_music(body: GenerateRequest):
     # DEBUG: Log incoming userId
     print(f"[generate] 🔍 Received request with userId={body.userId}")
+    print("[generate] ✅ RAW request body:", body.model_dump())
     print(f"[generate] ✅ body.model = {body.model!r}")
     
     api_key = os.getenv("SUNO_API_KEY")

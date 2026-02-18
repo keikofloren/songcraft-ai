@@ -44,17 +44,20 @@ export type UploadExtendInput = {
 const API_BASE = "/api";
 
 export async function generateTrack(input: GenerateInput) {
-    const res = await fetch(`${API_BASE}/generate`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'},
-            body: JSON.stringify({ ...input, model: 'V4' }),
-        }
-    );
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    return data;
+  const body = { model: 'V4', ...input };
+
+  console.log("[generateTrack] ✅ POST /api/generate body =", body);
+
+  const res = await fetch(`${API_BASE}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
+
 
 export async function getResult(taskId: string) {
     const res = await fetch(`${API_BASE}/result/${encodeURIComponent(taskId)}`);
@@ -80,7 +83,7 @@ export async function uploadExtend(input: UploadExtendInput) {
     const res = await fetch(`${API_BASE}/generate/upload-extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultParamFlag: true, ...input, model: 'V4' }),
+        body: JSON.stringify({ defaultParamFlag: true, ...input, model: 'V5' }),
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
