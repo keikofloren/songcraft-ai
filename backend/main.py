@@ -119,7 +119,7 @@ class UploadExtendRequest(BaseModel):
     style: Optional[str] = Field(None)
     title: Optional[str] = Field(None)
     continueAt: Optional[int] = Field(None)
-    model: Optional[str] = Field("V3_5")
+    model: Optional[str] = Field("V4")
     negativeTags: Optional[str] = Field(None)
     vocalGender: Optional[str] = Field(None)
     styleWeight: Optional[float] = Field(None)
@@ -146,7 +146,7 @@ def _extract_task_id(payload: dict) -> str | None:
     try:
         data = payload.get("data") or {}
         if isinstance(data, dict):
-            return data.get("taskId")
+            return data.get("taskId") or data.get("task_id") or data.get("id")
     except Exception as e:
         print(f"[extract_task_id] Error extracting task id: {e}")
     return None
@@ -193,6 +193,7 @@ def _extract_all_task_ids(payload: dict) -> list[str]:
 def upload_extend(body: UploadExtendRequest):
     # DEBUG: Log incoming userId
     print(f"[upload-extend] 🔍 Received request with userId={body.userId}")
+    print(f"[upload-extend] ✅ body.model = {body.model!r}")
     
     api_key = os.getenv("SUNO_API_KEY")
     if not api_key:
@@ -203,6 +204,7 @@ def upload_extend(body: UploadExtendRequest):
         "Content-Type": "application/json",
     }
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
+    payload["model"] = "V4"
     if not payload.get("callBackUrl"):
         public_base = os.getenv("PUBLIC_BASE_URL")
         if public_base:
@@ -338,6 +340,7 @@ async def proxy_audio(url: str, request: Request):
 def generate_music(body: GenerateRequest):
     # DEBUG: Log incoming userId
     print(f"[generate] 🔍 Received request with userId={body.userId}")
+    print(f"[generate] ✅ body.model = {body.model!r}")
     
     api_key = os.getenv("SUNO_API_KEY")
     if not api_key:
@@ -351,6 +354,7 @@ def generate_music(body: GenerateRequest):
 
     # Convert Pydantic model to dict and drop None fields
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
+    payload["model"] = "V4"  
     
     # DEBUG: Log what we're sending to Suno
     print(f"[generate] 🔍 Sending to Suno API:")
@@ -850,6 +854,7 @@ async def suno_webhook(request: Request):
                             "audio_url": audio_url,
                             "task_id": task_id
                         }
+                        inserted = true
                         
                         print(f"[webhook DEBUG] Attempting insert #{i+1} with data: {insert_data}")
                         result = supabase.table("songs").insert(insert_data).execute()
@@ -864,10 +869,11 @@ async def suno_webhook(request: Request):
                             if permanent_url != audio_url:
                                 supabase.table("songs").update({"audio_url": permanent_url}).eq("id", song_id).execute()
                                 print(f"[webhook] 🔄 Updated song #{song_id} with permanent storage URL")
-                
-                        # Clean up the metadata ONLY after successful insert with audio URLs
-                        del pending_metadata[task_id]
-                        print(f"[webhook] 🗑️  Cleaned up metadata for task_id={task_id}")
+
+                        if inserted:
+                            # Clean up the metadata ONLY after successful insert with audio URLs
+                            del pending_metadata[task_id]
+                            print(f"[webhook] 🗑️  Cleaned up metadata for task_id={task_id}")
                 else:
                     print(f"[webhook] ⏳ No audio URLs yet for task_id={task_id}, keeping metadata for next webhook call")
             else:
