@@ -24,6 +24,7 @@ type Song = {
   origin: string;
   created_at: string;
   audio_url?: string;
+  stream_audio_url?: string;
 };
 
 interface LocationState {
@@ -72,15 +73,32 @@ export default function MakeNotes() {
           setSong(data);
           setNotes(data.notes || "");
 
-          // If audio URL is passed from LoadingSong, use it
-          // Otherwise use the audio_url from the song record
-          let rawUrl = state?.audioUrl || data.audio_url;
+          const candidateFromState = state?.audioUrl;
+          const candidateFromDb = data.audio_url;
+          const candidateStream = (data as any).stream_audio_url;
+
+          const isRemoveAI = (u?: string) =>
+            !!u && u.includes("musicfile.removeai.ai");
+
+          const isAiQuickDraw = (u?: string) =>
+            !!u && u.includes("tempfile.aiquickdraw.com");
+
+          // Choose best source for WaveSurfer (prefer aiquickdraw)
+          let rawUrl =
+            candidateFromState ||
+            (isAiQuickDraw(candidateFromDb) ? candidateFromDb : undefined) ||
+            (isAiQuickDraw(candidateStream) ? candidateStream : undefined) ||
+            candidateFromDb ||
+            candidateStream;
 
           if (rawUrl) {
-            // Proxy through Vercel to avoid Mixed Content (HTTPS page calling HTTP EC2)
+            console.log("[MakeNotes] picked rawUrl:", rawUrl);
+
+            // Proxy through Vercel to avoid Mixed Content
             const proxiedUrl = `/api/proxy-audio?url=${encodeURIComponent(rawUrl)}`;
             setAudioUrl(proxiedUrl);
           }
+
         }
       } catch (error) {
         console.error("Error:", error);
