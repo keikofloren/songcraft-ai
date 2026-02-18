@@ -160,39 +160,47 @@ def _extract_task_id(payload: dict) -> str | None:
         print(f"[extract_task_id] Error extracting task id: {e}")
     return None
 
-
 def _extract_all_task_ids(payload: dict) -> list[str]:
-    """Extract all plausible ids to index the result under, to avoid 404s due to shape differences."""
     ids: set[str] = set()
+
+    def add(v):
+        if v:
+            ids.add(str(v))
+
     try:
         data = payload.get("data")
+
+        # If dict, check possible ids + also nested "data"
         if isinstance(data, dict):
-            # Check all possible task_id field names
             for k in ("task_id", "taskId", "id"):
-                if k in data and data[k]:
-                    ids.add(str(data[k]))
+                add(data.get(k))
+
+            nested = data.get("data")
+            if isinstance(nested, list):
+                for item in nested:
+                    if isinstance(item, dict):
+                        for k in ("task_id", "taskId", "id"):
+                            add(item.get(k))
+
+        # If list, check items
         if isinstance(data, list):
             for item in data:
                 if isinstance(item, dict):
                     for k in ("task_id", "taskId", "id"):
-                        if k in item and item[k]:
-                            ids.add(str(item[k]))
+                        add(item.get(k))
+
     except Exception:
         pass
-    # Check at top level too
+
     for k in ("task_id", "taskId", "id"):
-        if k in payload and payload[k]:
-            ids.add(str(payload[k]))
-    # Check arrays
+        add(payload.get(k))
+
     for k in ("task_ids", "taskIds", "ids"):
-        try:
-            arr = payload.get(k)
-            if isinstance(arr, list):
-                for v in arr:
-                    if v:
-                        ids.add(str(v))
-        except Exception:
-            pass
+        arr = payload.get(k)
+        if isinstance(arr, list):
+            for v in arr:
+                add(v)
+
     if not ids:
         ids.add("unknown")
     return list(ids)
@@ -244,12 +252,13 @@ def upload_extend(body: UploadExtendRequest):
         
         # Store metadata for later DB insert when webhook is called
         task_id = _extract_task_id(out)
-        print("[upload-extend] 🔍 Full response structure:", out)
+        all_ids = _extract_all_task_ids(out)
+
         print("[upload-extend] 🔍 Extracted task_id:", task_id)
-        print("[upload-extend] 🔍 All possible task_ids:", _extract_all_task_ids(out))
-        
+        print("[upload-extend] 🔍 All possible task_ids:", all_ids)
+
         if task_id:
-            pending_metadata[task_id] = {
+            meta = {
                 "user_id": body.userId,
                 "patient_id": body.patientId,
                 "title": body.title or "Untitled",
@@ -263,15 +272,12 @@ def upload_extend(body: UploadExtendRequest):
                 "vocal_gender": body.vocalGender,
                 "origin": "upload_extend"
             }
-            print(f"[upload-extend] ✅ Stored metadata for task_id={task_id}, userId={body.userId}")
-            print(f"[upload-extend] 🔍 Current pending_metadata keys: {list(pending_metadata.keys())}")
-            
-            # ALSO store under all possible IDs to avoid mismatches
-            all_ids = _extract_all_task_ids(out)
-            for alt_id in all_ids:
-                if alt_id != task_id and alt_id != "unknown":
-                    pending_metadata[alt_id] = pending_metadata[task_id]
-                    print(f"[upload-extend] 🔍 Also stored metadata under alternate ID: {alt_id}")
+
+            for tid in set([task_id] + all_ids):
+                if tid != "unknown":
+                    pending_metadata[tid] = meta
+
+            print(f"[upload-extend] ✅ Stored metadata under ids: {set([task_id] + all_ids)}")
         else:
             print(f"[upload-extend] ⚠️ Could not extract task_id from response")
         
@@ -410,12 +416,13 @@ def generate_music(body: GenerateRequest):
         
         # Store metadata for later DB insert when webhook is called
         task_id = _extract_task_id(result_payload)
-        print("[generate] 🔍 Full response structure:", result_payload)
+        all_ids = _extract_all_task_ids(result_payload)
+
         print("[generate] 🔍 Extracted task_id:", task_id)
-        print("[generate] 🔍 All possible task_ids:", _extract_all_task_ids(result_payload))
-        
+        print("[generate] 🔍 All possible task_ids:", all_ids)
+
         if task_id:
-            pending_metadata[task_id] = {
+            meta = {
                 "user_id": body.userId,
                 "patient_id": body.patientId,
                 "title": body.title or "Untitled",
@@ -429,15 +436,13 @@ def generate_music(body: GenerateRequest):
                 "vocal_gender": body.vocalGender,
                 "origin": "generated"
             }
-            print(f"[generate] ✅ Stored metadata for task_id={task_id}, userId={body.userId}")
-            print(f"[generate] 🔍 Current pending_metadata keys: {list(pending_metadata.keys())}")
-            
-            # ALSO store under all possible IDs to avoid mismatches
-            all_ids = _extract_all_task_ids(result_payload)
-            for alt_id in all_ids:
-                if alt_id != task_id and alt_id != "unknown":
-                    pending_metadata[alt_id] = pending_metadata[task_id]
-                    print(f"[generate] 🔍 Also stored metadata under alternate ID: {alt_id}")
+
+            # 🔥 store under ALL ids (fixes "Song not found")
+            for tid in set([task_id] + all_ids):
+                if tid != "unknown":
+                    pending_metadata[tid] = meta
+
+            print(f"[generate] ✅ Stored metadata under ids: {set([task_id] + all_ids)}")
         else:
             print(f"[generate] ⚠️ Could not extract task_id from response")
         
@@ -803,8 +808,6 @@ async def suno_webhook(request: Request):
     webhook_status["last_payload"] = payload
     # Store under all plausible ids
     all_ids = _extract_all_task_ids(payload)
-    for tid in all_ids:
-        results_store[tid] = payload
     try:
         print(f"[webhook] stored under ids: {all_ids}")
     except Exception:
@@ -866,29 +869,43 @@ async def suno_webhook(request: Request):
         traceback.print_exc()
 
     
-    # Insert into database if we have metadata for this task
-    if task_id in pending_metadata and supabase is not None:
+    # Find matching metadata by ANY plausible id
+    matched_id = None
+    for tid in all_ids:
+        if tid in pending_metadata:
+            matched_id = tid
+            break
+
+    if matched_id and supabase is not None:
         try:
-            metadata = pending_metadata[task_id]
+            metadata = pending_metadata[matched_id]
+            print(f"[webhook DEBUG] ✅ matched pending_metadata id: {matched_id}")
             print(f"[webhook DEBUG] metadata={metadata}")
             print(f"[webhook DEBUG] extracted audio_items={audio_items}")
 
-            # Only insert if user_id exists
+            # ✅ ALSO store webhook payload under ALL pending_metadata keys that reference this same meta
+            meta_keys = [k for k, v in pending_metadata.items() if v is metadata]
+            for k in set(all_ids + meta_keys):
+                if k != "unknown":
+                    results_store[k] = payload
+
+            print(f"[webhook DEBUG] ✅ Stored results under ids: {set(all_ids + meta_keys)}")
+
+
             if not metadata.get("user_id"):
-                print(f"[webhook] ❌ Skipping insert for task_id={task_id} - no user_id")
+                print(f"[webhook] ❌ Skipping insert - no user_id")
                 return {"ok": True, "task_id": task_id}
 
             if len(audio_items) == 0:
-                print(f"[webhook] ⏳ No audio URLs yet for task_id={task_id}, keeping metadata for next webhook call")
+                print(f"[webhook] ⏳ No audio URLs yet, keeping metadata for next webhook call")
                 return {"ok": True, "task_id": task_id}
 
-            # Insert a song record for EACH audio item (Suno generates 2 versions)
             for i, audio in enumerate(audio_items):
-                primary_audio = audio.get("audio_url")          # aiquickdraw
-                stream_audio = audio.get("stream_audio_url")    # removeai
-                clip_id = item.get("id") 
-                chosen_audio_url = primary_audio  # only aiquickdraw is allowed for playback
+                clip_id = audio.get("clip_id")
+                primary_audio = audio.get("audio_url")
+                stream_audio = audio.get("stream_audio_url")
 
+                chosen_audio_url = primary_audio or stream_audio
                 if not chosen_audio_url:
                     print(f"[webhook] ⚠️ Skipping insert #{i+1}: no aiquickdraw audio_url yet (clip_id={clip_id})")
                     continue
@@ -906,39 +923,32 @@ async def suno_webhook(request: Request):
                     "notes": metadata.get("notes"),
                     "vocal_gender": metadata.get("vocal_gender"),
                     "origin": metadata.get("origin", "webhook"),
-                    "audio_url": chosen_audio_url,         # PRIMARY (aiquickdraw preferred)
-                    "stream_audio_url": stream_audio,      # BACKUP (removeai)
-                    "task_id": task_id
+                    "audio_url": chosen_audio_url,
+                    "stream_audio_url": stream_audio,
+                    "task_id": task_id,     # the webhook's task id (grouping)
+                    "suno_clip_id": clip_id, # unique per clip
                 }
 
                 print(f"[webhook DEBUG] Attempting insert #{i+1} with data: {insert_data}")
                 result = supabase.table("songs").insert(insert_data).execute()
-                print(f"[webhook] ✅ Successfully inserted song #{i+1} for task_id={task_id}")
+                print(f"[webhook] ✅ Successfully inserted song #{i+1} (clip_id={clip_id})")
 
-                # Upload PRIMARY audio to Supabase Storage for permanent storage
-                if result.data and len(result.data) > 0 and chosen_audio_url:
-                    song_id = result.data[0]["id"]
-                    permanent_url = upload_audio_to_supabase(chosen_audio_url, song_id)
-
-                    # Update the song record with the permanent URL
-                    if permanent_url and permanent_url != chosen_audio_url:
-                        supabase.table("songs").update({"audio_url": permanent_url}).eq("id", song_id).execute()
-                        print(f"[webhook] 🔄 Updated song #{song_id} with permanent storage URL")
-
-            # Clean up metadata after successful inserts
-            del pending_metadata[task_id]
-            print(f"[webhook] 🗑️  Cleaned up metadata for task_id={task_id}")
+            # Clean up metadata: delete ALL keys that reference the SAME meta dict
+            meta_keys = [k for k, v in pending_metadata.items() if v is metadata]
+            for k in meta_keys:
+                del pending_metadata[k]
+            print(f"[webhook] 🗑️ Cleaned up metadata keys: {meta_keys}")
 
         except Exception as e:
             print(f"[webhook] ❌ Error inserting song: {e}")
             import traceback
             traceback.print_exc()
-
     else:
-        if task_id not in pending_metadata:
-            print(f"[webhook] ⚠️  No metadata found for task_id={task_id}")
+        if not matched_id:
+            print(f"[webhook] ⚠️ No metadata found for any of these ids: {all_ids}")
         if supabase is None:
-            print(f"[webhook] ⚠️  Supabase client is None - check SUPABASE_URL and SUPABASE_KEY in .env")
+            print(f"[webhook] ⚠️ Supabase client is None")
+
 
     return {"ok": True, "task_id": task_id}
 
