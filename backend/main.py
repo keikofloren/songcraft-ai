@@ -265,7 +265,6 @@ def upload_extend(body: UploadExtendRequest):
         print("[upload-extend] Full response:", out)
         print("[upload-extend] response keys:", list(out.keys()))
         
-        # Store metadata for later DB insert when webhook is called
         task_id = _extract_task_id(out)
         all_ids = _extract_all_task_ids(out)
 
@@ -833,15 +832,21 @@ async def suno_webhook(request: Request):
         payload = {"raw": await request.body()}
     webhook_status["last_hit"] = int(time.time())
     webhook_status["last_payload"] = payload
-    # Store under all plausible ids
     all_ids = _extract_all_task_ids(payload)
+    true_task_id = (
+        (payload.get("data") or {}).get("task_id")
+        or (payload.get("data") or {}).get("taskId")
+        or _extract_task_id(payload)
+        or all_ids[0]
+    )
+
+    task_id = true_task_id
+
     try:
         print(f"[webhook] stored under ids: {all_ids}")
     except Exception:
         pass
-    # Return primary id for convenience
-    task_id = _extract_task_id(payload) or all_ids[0]
-    
+  
     # DEBUG: Log what we have
     print(f"[webhook DEBUG] task_id={task_id}")
     print(f"[webhook DEBUG] task_id in pending_metadata? {task_id in pending_metadata}")
