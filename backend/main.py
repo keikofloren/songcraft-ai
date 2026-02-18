@@ -871,7 +871,7 @@ async def suno_webhook(request: Request):
                             "audio_url": audio_url,
                             "task_id": task_id
                         }
-                        inserted = true
+                        inserted = True
                         
                         print(f"[webhook DEBUG] Attempting insert #{i+1} with data: {insert_data}")
                         result = supabase.table("songs").insert(insert_data).execute()

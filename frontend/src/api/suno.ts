@@ -48,7 +48,7 @@ export async function generateTrack(input: GenerateInput) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'},
-            body: JSON.stringify(input),
+            body: JSON.stringify({ ...input, model: 'V4' }),
         }
     );
     if (!res.ok) throw new Error(await res.text());
@@ -80,7 +80,7 @@ export async function uploadExtend(input: UploadExtendInput) {
     const res = await fetch(`${API_BASE}/generate/upload-extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultParamFlag: true, model: 'V3_5', ...input }),
+        body: JSON.stringify({ defaultParamFlag: true, ...input, model: 'V4' }),
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
