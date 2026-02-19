@@ -265,8 +265,13 @@ def upload_extend(body: UploadExtendRequest):
         print("[upload-extend] Full response:", out)
         print("[upload-extend] response keys:", list(out.keys()))
         
-        task_id = _extract_task_id(out)
         all_ids = _extract_all_task_ids(out)
+        task_id = (
+            (out.get("data") or {}).get("task_id")
+            or (out.get("data") or {}).get("taskId")
+            or _extract_task_id(out)
+            or (all_ids[0] if all_ids else None)
+        )
 
         print("[upload-extend] 🔍 Extracted task_id:", task_id)
         print("[upload-extend] 🔍 All possible task_ids:", all_ids)
@@ -440,9 +445,13 @@ def generate_music(body: GenerateRequest):
         print("[generate] Full response:", result_payload)
         print("[generate] response keys:", list(result_payload.keys()))
         
-        # Store metadata for later DB insert when webhook is called
-        task_id = _extract_task_id(result_payload)
         all_ids = _extract_all_task_ids(result_payload)
+        task_id = (
+            (result_payload.get("data") or {}).get("task_id")
+            or (result_payload.get("data") or {}).get("taskId")
+            or _extract_task_id(result_payload)
+            or (all_ids[0] if all_ids else None)
+        )
 
         print("[generate] 🔍 Extracted task_id:", task_id)
         print("[generate] 🔍 All possible task_ids:", all_ids)
@@ -484,7 +493,7 @@ if __name__ == "__main__":
     # Enable running with: python main.py
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
 
 @app.get("/db/health")
 def db_health(): 
@@ -842,6 +851,11 @@ async def suno_webhook(request: Request):
 
     task_id = true_task_id
 
+    # ✅ ALWAYS store for polling (fixes "Song not found")
+    for k in set(all_ids + [task_id]):
+        if k and k != "unknown":
+            results_store[k] = payload
+
     try:
         print(f"[webhook] stored under ids: {all_ids}")
     except Exception:
@@ -991,10 +1005,45 @@ async def suno_webhook(request: Request):
 def webhook_status_endpoint():
     return webhook_status   
 
-
 @app.get("/result/{task_id}")
 def get_result(task_id: str):
+    # 1) Fast path: in-memory (webhook payload)
     if task_id in results_store:
         return results_store[task_id]
-    raise HTTPException(status_code=404, detail="Result not found")
 
+    # 2) Durable fallback: query Supabase
+    if supabase is not None:
+        try:
+            res = (
+                supabase.table("songs")
+                .select("*")
+                .or_(f'task_id.eq."{task_id}",suno_clip_id.eq."{task_id}"')  # ✅ quoted
+                .order("created_at", desc=True)
+                .execute()
+            )
+            rows = getattr(res, "data", None) or []
+            if rows:
+                clips = []
+                for r in rows:
+                    clips.append({
+                        "id": r.get("suno_clip_id"),
+                        "audio_url": r.get("audio_url") or r.get("stream_audio_url"),  # ✅ fallback
+                        "stream_audio_url": r.get("stream_audio_url"),
+                        "title": r.get("title"),
+                        "prompt": r.get("prompt"),
+                    })
+
+                return {
+                    "code": 200,
+                    "data": {
+                        "callbackType": "complete",
+                        "taskId": task_id,
+                        "task_id": task_id,
+                        "data": clips,
+                        "source": "supabase_fallback",
+                    },
+                }
+        except Exception as e:
+            print(f"[result] supabase fallback error: {e}")
+
+    raise HTTPException(status_code=404, detail="Result not found")
